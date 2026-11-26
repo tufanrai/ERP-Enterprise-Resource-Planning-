@@ -8,7 +8,7 @@
 - **Style:** Modular monolith ([ADR-0001](adr/0001-modular-monolith.md)). One deployable backend, split internally into modules with strict boundaries, so modules can be extracted into services later.
 - **Tenancy:** Shared database, shared schema, `tenant_id` on every row, enforced by PostgreSQL row-level security ([ADR-0002](adr/0002-multi-tenancy-strategy.md)).
 - **Stack:** TypeScript end to end. Next.js frontend, NestJS backend, PostgreSQL, Redis, S3-compatible object storage ([ADR-0003](adr/0003-technology-stack.md)).
-- **Hosting:** Containers on AWS, infrastructure as code with Terraform ([Infrastructure and deployment](05-infrastructure-and-deployment.md)).
+- **Hosting:** Docker containers on a provider-neutral host for the MVP, no AWS ([ADR-0005](adr/0005-mvp-hosting-without-aws.md)). A move to a larger cloud is planned only when scale requires it ([Infrastructure and deployment](05-infrastructure-and-deployment.md)).
 
 ## 2. Context diagram (C4 level 1)
 
@@ -44,9 +44,9 @@ flowchart LR
     web[Web app<br/>Next.js / React]
   end
 
-  subgraph AWS["Cloud (AWS)"]
-    cdn[CDN + WAF]
-    lb[Load balancer]
+  subgraph Host["Hosting (MVP: Docker host, provider TBD)"]
+    cdn[CDN + WAF<br/>e.g. Cloudflare]
+    lb[Reverse proxy<br/>Caddy / Nginx, TLS]
     api[API server<br/>NestJS modular monolith]
     worker[Background workers<br/>BullMQ]
     pg[(PostgreSQL<br/>primary + read replica)]
@@ -73,7 +73,7 @@ flowchart LR
 | Workers | Long-running and async jobs: reports, imports, emails, webhooks, payroll runs | NestJS + BullMQ |
 | PostgreSQL | System of record | PostgreSQL 16, row-level security |
 | Redis | Cache, job queues, rate limiting | Redis 7 |
-| Object storage | Files: attachments, generated PDFs, exports | Amazon S3 |
+| Object storage | Files: attachments, generated PDFs, exports | Any S3-compatible storage (MinIO self-hosted for MVP, or the host's object storage) |
 
 ## 4. Backend module structure (C4 level 3)
 
@@ -171,7 +171,7 @@ sequenceDiagram
 | Time | Stored in UTC (`timestamptz`); displayed in tenant time zone |
 | IDs | UUID v7 (time-ordered) primary keys |
 | Idempotency | `Idempotency-Key` header on POST endpoints |
-| Configuration | Environment variables, validated at startup; secrets in AWS Secrets Manager |
+| Configuration | Environment variables, validated at startup; secrets injected from the host's secret store or an encrypted secrets file (never committed); a dedicated secrets manager later |
 | Observability | OpenTelemetry traces, structured JSON logs, Prometheus-style metrics, request ID on every log line |
 | Feature flags | Per tenant and per environment, for gradual rollout |
 | Localization | i18n message catalogs on the frontend; locale-aware formatting |

@@ -138,7 +138,7 @@ Priority uses MoSCoW: **M**ust, **S**hould, **C**ould, **W**on't (this release).
 
 | ID | Category | Requirement |
 |---|---|---|
-| NFR-01 | Availability | 99.9% monthly uptime (excluding announced maintenance) |
+| NFR-01 | Availability | 99.5% monthly uptime during MVP; 99.9% from Beta (excluding announced maintenance) |
 | NFR-02 | Performance | p95 API response < 300 ms for standard reads; < 800 ms for writes; reports < 5 s for 1M rows |
 | NFR-03 | Scalability | Support 5,000 tenants and 100 concurrent users per tenant without redesign |
 | NFR-04 | Security | OWASP ASVS Level 2; encryption in transit (TLS 1.2+) and at rest (AES-256) |

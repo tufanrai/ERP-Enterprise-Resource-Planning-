@@ -37,7 +37,7 @@ Steps: declare → assign incident lead → communicate (status page, support) �
 
 | Runbook | Covers |
 |---|---|
-| `runbooks/database-failover.md` | RDS failover and verification |
+| `runbooks/database-failover.md` | Database restore and failover to a standby/replica |
 | `runbooks/restore-from-backup.md` | Point-in-time restore of one tenant or all |
 | `runbooks/queue-backlog.md` | Draining stuck BullMQ jobs |
 | `runbooks/rotate-secrets.md` | Rotating database, API and signing secrets |
@@ -47,7 +47,7 @@ Steps: declare → assign incident lead → communicate (status page, support) �
 
 | SLO | Target |
 |---|---|
-| Availability | 99.9% monthly |
+| Availability | 99.5% monthly (MVP), 99.9% (Beta onward) |
 | API p95 latency | < 300 ms (reads) |
 | Webhook delivery | 99% within 1 minute |
 | Support first response | < 4 working hours (Business), < 1 hour (Enterprise) |

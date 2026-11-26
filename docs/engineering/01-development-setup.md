@@ -28,7 +28,7 @@
 │   ├── contracts/        # shared types and validation schemas (zod)
 │   ├── config/           # shared eslint, tsconfig, prettier
 │   └── testing/          # test utilities, factories
-├── infra/                # Terraform
+├── infra/                # server provisioning scripts, production compose files
 ├── docs/                 # this documentation
 ├── docker-compose.yml    # local PostgreSQL, Redis, MinIO (S3), Mailpit
 └── turbo.json

@@ -1,6 +1,6 @@
 # ADR-0003: TypeScript stack — Next.js, NestJS, PostgreSQL
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-26)
 - **Date:** 2026-11-26
 - **Deciders:** Tech Lead, engineering team
 
@@ -20,7 +20,7 @@ We need a stack that a small team can be productive in, that is easy to hire for
 | Cache / queues | Redis + BullMQ | Simple, reliable background jobs |
 | Monorepo | pnpm workspaces + Turborepo | Shared packages, fast cached builds |
 | Testing | Vitest/Jest, Supertest, Playwright, Testcontainers | Unit, API, E2E with real PostgreSQL |
-| Infra | Docker, Terraform, AWS (ECS Fargate, RDS, ElastiCache, S3) | Managed services, low ops load |
+| Infra | Docker and Docker Compose; hosting per [ADR-0005](0005-mvp-hosting-without-aws.md) (no AWS for the MVP) | Portable, cheap and simple for a small team |
 | CI/CD | GitHub Actions | Close to the code, free tier for start |
 
 ## Alternatives considered

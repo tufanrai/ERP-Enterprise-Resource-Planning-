@@ -31,9 +31,9 @@
 
 ### Data protection
 - TLS 1.2+ everywhere; HSTS.
-- Encryption at rest for database, backups and object storage (AWS KMS).
+- Encryption at rest for database, backups and object storage (provider disk encryption plus encrypted backups for the MVP; a managed key service once we move to a larger cloud).
 - Application-level encryption for sensitive fields (bank accounts, national IDs, salaries).
-- Secrets in AWS Secrets Manager; never in code or environment files committed to git.
+- Secrets kept in the host's secret store or an encrypted secrets file for the MVP; never in code or environment files committed to git.
 
 ### Application security
 - Follow OWASP ASVS Level 2 and OWASP Top 10.

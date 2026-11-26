@@ -1,100 +1,113 @@
 # Infrastructure and Deployment
 
-> **Status:** Draft (proposed) · **Owner:** Tech Lead / DevOps · **Audience:** Engineers, DevOps
+> **Status:** Draft · **Owner:** Tech Lead / DevOps · **Audience:** Engineers, DevOps
+> **MVP decision:** no AWS. Everything runs as Docker containers on a provider-neutral host ([ADR-0005](adr/0005-mvp-hosting-without-aws.md)).
 
 ## 1. Environments
 
 | Environment | Purpose | Data | Deploys |
 |---|---|---|---|
 | Local | Development | Seed data | Developer machine (Docker Compose) |
-| Preview | Review a pull request | Seed data | Automatically per PR (optional, Phase 2) |
-| Staging | Integration and QA, mirrors production | Anonymized/synthetic | Automatically on merge to `main` |
+| Staging | Integration and QA, mirrors production | Synthetic | Automatically on merge to `main` |
 | Production | Customers | Real | Manual approval after staging checks |
+| Preview (later) | Review a pull request | Seed data | Per PR, once the team grows |
 
-## 2. Cloud layout (AWS, proposed)
+## 2. MVP hosting layout
 
 ```mermaid
 flowchart TB
-  subgraph Region
-    cf[CloudFront + WAF]
-    alb[Application Load Balancer]
-    subgraph VPC
-      subgraph Public subnets
-        alb
-      end
-      subgraph Private subnets
-        api[ECS Fargate: API service]
-        web[ECS Fargate: Web service]
-        wrk[ECS Fargate: Workers]
-        rds[(RDS PostgreSQL<br/>Multi-AZ)]
-        ec[(ElastiCache Redis)]
-      end
-    end
-    s3[(S3 buckets)]
-    sm[Secrets Manager]
-    cw[Logs / metrics / traces]
+  user[Users' browsers] --> cdn[CDN / WAF<br/>optional, e.g. Cloudflare]
+  cdn --> proxy
+
+  subgraph Server["Production host (provider TBD)"]
+    proxy[Reverse proxy<br/>Caddy or Nginx, automatic TLS]
+    web[web container<br/>Next.js]
+    api[api container<br/>NestJS]
+    wrk[worker container<br/>BullMQ]
+    redis[(redis container)]
+    minio[(minio container<br/>S3-compatible files)]
   end
-  cf --> alb --> web & api
-  api --> rds & ec & s3 & sm
-  wrk --> rds & ec & s3
-  api & wrk & web --> cw
+
+  pg[(PostgreSQL<br/>managed by provider if available,<br/>otherwise a container)]
+  backup[(Off-site backup storage)]
+  mon[Monitoring and error tracking]
+
+  proxy --> web & api
+  api --> pg & redis & minio
+  wrk --> pg & redis & minio
+  pg -. nightly + WAL backups .-> backup
+  minio -. daily sync .-> backup
+  api & wrk & web -.-> mon
 ```
 
-- Containers run on **ECS Fargate** to avoid managing servers or Kubernetes at launch. Revisit when the team has dedicated platform engineers.
-- **RDS PostgreSQL Multi-AZ** with automated backups and point-in-time recovery.
-- All infrastructure defined in **Terraform** under `infra/`.
+- **Start small:** one production server (e.g. 4 vCPU / 8 GB RAM) plus managed PostgreSQL, and a smaller staging server.
+- **Scale up first, then out:** add CPU/RAM, then run several `api` and `worker` replicas behind the proxy.
+- Server setup is scripted (for example Ansible or a cloud-init script) and kept in `infra/`, so a server can be rebuilt from scratch.
 
 ## 3. CI/CD pipeline (GitHub Actions)
 
 ```mermaid
 flowchart LR
-  pr[Pull request] --> lint[Lint + type check]
-  lint --> test[Unit + integration tests]
-  test --> sec[Security scans]
-  sec --> build[Build images]
-  build --> review[Code review approved]
+  pr[Pull request] --> checks[Lint, type check,<br/>unit + integration tests,<br/>security scans]
+  checks --> review[Code review approved]
   review --> merge[Merge to main]
-  merge --> stg[Deploy to staging]
+  merge --> build[Build Docker images<br/>push to GitHub Container Registry]
+  build --> stg[Deploy to staging<br/>docker compose pull && up -d]
   stg --> e2e[E2E + smoke tests]
   e2e --> approve[Manual approval]
-  approve --> prod[Deploy to production<br/>rolling / canary]
+  approve --> prod[Deploy to production]
   prod --> smoke[Smoke tests + monitoring]
 ```
 
-- Database migrations run as a separate step before the new version receives traffic. Migrations must be **backward compatible** (expand, then contract) so a rollback of the app never needs a rollback of the schema.
+- Images are tagged with the commit SHA and stored in **GitHub Container Registry**.
+- Deploy = SSH (or the platform's deploy hook) → `docker compose pull` → run migrations → `docker compose up -d`.
+- Migrations must be **backward compatible** (expand, then contract), so rolling back the app never needs a schema rollback.
 - Rollback = redeploy the previous image tag.
 
 ## 4. Backups and disaster recovery
 
-| Item | Policy |
+| Item | MVP policy |
 |---|---|
-| Database | Continuous backup, point-in-time recovery for 35 days; daily snapshot copied to a second region |
-| Object storage | Versioning enabled; cross-region replication for production |
-| Restore test | Quarterly, documented |
-| Targets | RPO ≤ 15 min, RTO ≤ 4 h |
+| Database | Provider's automated backups with point-in-time recovery if managed; otherwise nightly `pg_dump` + continuous WAL archiving (e.g. pgBackRest or WAL-G) to off-site storage |
+| Files (MinIO) | Daily sync to off-site S3-compatible storage at a different provider/region |
+| Server config | Scripted in `infra/`; no hand-made changes |
+| Restore test | Monthly during MVP, documented |
+| Targets | MVP: RPO ≤ 1 h, RTO ≤ 8 h. From Beta: RPO ≤ 15 min, RTO ≤ 4 h |
 
-## 5. Observability
+## 5. Observability (provider-neutral)
 
 | Signal | Tool (proposed) | Notes |
 |---|---|---|
-| Logs | CloudWatch Logs or Grafana Loki | Structured JSON, `requestId`, `tenantId`, no secrets or personal data |
-| Metrics | Prometheus-compatible / CloudWatch | RED metrics per endpoint, queue depth, DB health |
-| Traces | OpenTelemetry → Grafana Tempo / AWS X-Ray | Trace across API, workers and database |
-| Errors | Sentry | Frontend and backend |
-| Uptime | External synthetic checks | Public status page |
+| Logs | Grafana Loki (self-hosted or Grafana Cloud free tier) | Structured JSON, `requestId`, `tenantId`, no secrets or personal data |
+| Metrics | Prometheus + Grafana | RED metrics per endpoint, queue depth, DB and host health |
+| Traces | OpenTelemetry → Grafana Tempo | Added once the MVP is stable |
+| Errors | Sentry (cloud or self-hosted) | Frontend and backend |
+| Uptime | External checks (e.g. UptimeRobot / Better Stack) | Public status page |
 
 ## 6. Alerting (starting set)
 
 | Alert | Threshold | Severity |
 |---|---|---|
+| Site down | Uptime check fails twice | SEV1 |
 | API error rate | > 2% for 5 min | SEV2 |
+| Backup job failed | Any failure | SEV2 |
+| Disk usage | > 80% | SEV3 |
 | API p95 latency | > 1 s for 10 min | SEV3 |
-| Database CPU | > 80% for 15 min | SEV3 |
-| Queue backlog | > 10,000 jobs or oldest > 10 min | SEV3 |
-| Site down | Synthetic check fails twice | SEV1 |
+| Queue backlog | Oldest job > 10 min | SEV3 |
+| TLS certificate | Expires in < 14 days | SEV3 |
 
-## 7. Cost management
+## 7. Availability targets
 
-- Tags on every resource: `env`, `service`, `owner`.
-- Monthly budget alerts.
-- Monthly review of cost per tenant.
+| Phase | Target | Why |
+|---|---|---|
+| MVP (pilots) | 99.5% monthly | Single server; pilots are told about planned maintenance |
+| Beta onward | 99.9% monthly | Requires redundancy (second app server, managed DB with standby); see ADR-0005 revisit triggers |
+
+## 8. Moving to a larger cloud later
+
+Because the code uses only portable interfaces (S3 API, PostgreSQL, Redis, SMTP, env vars), moving to AWS, GCP or Azure is a hosting project: provision equivalents, restore the database, sync files, switch DNS. Write a new ADR that supersedes ADR-0005 when that happens.
+
+## 9. Cost management
+
+- Track monthly hosting cost per environment.
+- Review cost per tenant monthly once there are paying customers.

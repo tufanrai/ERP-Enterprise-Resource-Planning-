@@ -90,7 +90,7 @@ R = Responsible, A = Accountable, C = Consulted, I = Informed
 | Category | Estimate |
 |---|---|
 | People | [TBD] |
-| Cloud and tooling | [TBD] |
+| Hosting and tooling (no AWS for MVP) | [TBD] |
 | Security audit | [TBD] |
 | Marketing launch | [TBD] |
 | Contingency (10–15%) | [TBD] |
