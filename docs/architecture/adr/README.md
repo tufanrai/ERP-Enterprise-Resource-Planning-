@@ -18,4 +18,4 @@ An ADR records one significant technical decision: the context, the choice and i
 | [0002](0002-multi-tenancy-strategy.md) | Shared-schema multi-tenancy with PostgreSQL row-level security | Proposed |
 | [0003](0003-technology-stack.md) | TypeScript stack: Next.js, NestJS, PostgreSQL | Accepted |
 | [0004](0004-event-driven-integration-with-outbox.md) | Module integration through domain events and a transactional outbox | Proposed |
-| [0005](0005-mvp-hosting-without-aws.md) | Provider-neutral Docker hosting for the MVP, no AWS | Accepted |
+| [0005](0005-mvp-hosting-without-aws.md) | Docker hosting on Contabo Linux VPS for the MVP, no AWS | Accepted |

@@ -1,7 +1,7 @@
 # Infrastructure and Deployment
 
 > **Status:** Draft · **Owner:** Tech Lead / DevOps · **Audience:** Engineers, DevOps
-> **MVP decision:** no AWS. Everything runs as Docker containers on a provider-neutral host ([ADR-0005](adr/0005-mvp-hosting-without-aws.md)).
+> **MVP decision:** no AWS. Everything runs as Docker containers on **Contabo Linux VPS** servers ([ADR-0005](adr/0005-mvp-hosting-without-aws.md)).
 
 ## 1. Environments
 
@@ -19,17 +19,17 @@ flowchart TB
   user[Users' browsers] --> cdn[CDN / WAF<br/>optional, e.g. Cloudflare]
   cdn --> proxy
 
-  subgraph Server["Production host (provider TBD)"]
+  subgraph Server["Production: Contabo Linux VPS (Ubuntu LTS)"]
     proxy[Reverse proxy<br/>Caddy or Nginx, automatic TLS]
     web[web container<br/>Next.js]
     api[api container<br/>NestJS]
     wrk[worker container<br/>BullMQ]
     redis[(redis container)]
     minio[(minio container<br/>S3-compatible files)]
+    pg[(postgres container)]
   end
 
-  pg[(PostgreSQL<br/>managed by provider if available,<br/>otherwise a container)]
-  backup[(Off-site backup storage)]
+  backup[(Off-site backups<br/>Contabo Object Storage in another region,<br/>or a second provider)]
   mon[Monitoring and error tracking]
 
   proxy --> web & api
@@ -40,11 +40,29 @@ flowchart TB
   api & wrk & web -.-> mon
 ```
 
-- **Start small:** one production server (e.g. 4 vCPU / 8 GB RAM) plus managed PostgreSQL, and a smaller staging server.
+- **Start small:** one Contabo VPS for production (for example 6+ vCPU / 12+ GB RAM / NVMe; size to the current Contabo plans) and a smaller VPS for staging.
+- **Next step when load grows:** move PostgreSQL to its own Contabo VPS on the private network, then add a second app VPS behind the proxy.
 - **Scale up first, then out:** add CPU/RAM, then run several `api` and `worker` replicas behind the proxy.
 - Server setup is scripted (for example Ansible or a cloud-init script) and kept in `infra/`, so a server can be rebuilt from scratch.
 
-## 3. CI/CD pipeline (GitHub Actions)
+## 3. Contabo server setup checklist
+
+Contabo provides unmanaged VPS servers, so we harden and maintain them ourselves. Script every step in `infra/` (Ansible or cloud-init).
+
+- [ ] Ubuntu LTS image; automatic security updates (`unattended-upgrades`)
+- [ ] Non-root sudo user; SSH key login only; root login and password login disabled
+- [ ] Firewall (`ufw`): allow only 22 (ideally from known IPs), 80 and 443
+- [ ] `fail2ban` for SSH
+- [ ] Docker Engine and Docker Compose plugin installed from the official repository
+- [ ] PostgreSQL, Redis and MinIO bound to the Docker network only, never exposed publicly (note: Docker port mappings bypass `ufw`, so don't publish these ports)
+- [ ] Caddy (or Nginx + certbot) for automatic TLS certificates
+- [ ] DNS through Cloudflare (optional proxy/WAF in front of the VPS IP)
+- [ ] Secrets in a root-only `.env` file on the server (or an encrypted file decrypted at deploy, e.g. SOPS); never in git
+- [ ] Backup jobs scheduled and their first restore tested
+- [ ] Monitoring agent (node exporter / Grafana Alloy) and uptime check configured
+- [ ] Contabo snapshot taken after initial setup (a convenience, not a replacement for off-site backups)
+
+## 4. CI/CD pipeline (GitHub Actions)
 
 ```mermaid
 flowchart LR
@@ -64,17 +82,17 @@ flowchart LR
 - Migrations must be **backward compatible** (expand, then contract), so rolling back the app never needs a schema rollback.
 - Rollback = redeploy the previous image tag.
 
-## 4. Backups and disaster recovery
+## 5. Backups and disaster recovery
 
 | Item | MVP policy |
 |---|---|
-| Database | Provider's automated backups with point-in-time recovery if managed; otherwise nightly `pg_dump` + continuous WAL archiving (e.g. pgBackRest or WAL-G) to off-site storage |
-| Files (MinIO) | Daily sync to off-site S3-compatible storage at a different provider/region |
-| Server config | Scripted in `infra/`; no hand-made changes |
+| Database | Nightly `pg_dump` plus continuous WAL archiving (pgBackRest or WAL-G) to Contabo Object Storage in a different region, or to a second provider |
+| Files (MinIO) | Daily sync to off-site S3-compatible storage in a different region or provider |
+| Server config | Scripted in `infra/`; no hand-made changes. Contabo snapshots before risky changes |
 | Restore test | Monthly during MVP, documented |
 | Targets | MVP: RPO ≤ 1 h, RTO ≤ 8 h. From Beta: RPO ≤ 15 min, RTO ≤ 4 h |
 
-## 5. Observability (provider-neutral)
+## 6. Observability (provider-neutral)
 
 | Signal | Tool (proposed) | Notes |
 |---|---|---|
@@ -84,7 +102,7 @@ flowchart LR
 | Errors | Sentry (cloud or self-hosted) | Frontend and backend |
 | Uptime | External checks (e.g. UptimeRobot / Better Stack) | Public status page |
 
-## 6. Alerting (starting set)
+## 7. Alerting (starting set)
 
 | Alert | Threshold | Severity |
 |---|---|---|
@@ -96,18 +114,18 @@ flowchart LR
 | Queue backlog | Oldest job > 10 min | SEV3 |
 | TLS certificate | Expires in < 14 days | SEV3 |
 
-## 7. Availability targets
+## 8. Availability targets
 
 | Phase | Target | Why |
 |---|---|---|
 | MVP (pilots) | 99.5% monthly | Single server; pilots are told about planned maintenance |
 | Beta onward | 99.9% monthly | Requires redundancy (second app server, managed DB with standby); see ADR-0005 revisit triggers |
 
-## 8. Moving to a larger cloud later
+## 9. Moving off Contabo later
 
 Because the code uses only portable interfaces (S3 API, PostgreSQL, Redis, SMTP, env vars), moving to AWS, GCP or Azure is a hosting project: provision equivalents, restore the database, sync files, switch DNS. Write a new ADR that supersedes ADR-0005 when that happens.
 
-## 9. Cost management
+## 10. Cost management
 
 - Track monthly hosting cost per environment.
 - Review cost per tenant monthly once there are paying customers.

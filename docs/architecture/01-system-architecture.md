@@ -8,7 +8,7 @@
 - **Style:** Modular monolith ([ADR-0001](adr/0001-modular-monolith.md)). One deployable backend, split internally into modules with strict boundaries, so modules can be extracted into services later.
 - **Tenancy:** Shared database, shared schema, `tenant_id` on every row, enforced by PostgreSQL row-level security ([ADR-0002](adr/0002-multi-tenancy-strategy.md)).
 - **Stack:** TypeScript end to end. Next.js frontend, NestJS backend, PostgreSQL, Redis, S3-compatible object storage ([ADR-0003](adr/0003-technology-stack.md)).
-- **Hosting:** Docker containers on a provider-neutral host for the MVP, no AWS ([ADR-0005](adr/0005-mvp-hosting-without-aws.md)). A move to a larger cloud is planned only when scale requires it ([Infrastructure and deployment](05-infrastructure-and-deployment.md)).
+- **Hosting:** Docker containers on Contabo Linux VPS for the MVP, no AWS ([ADR-0005](adr/0005-mvp-hosting-without-aws.md)). A move to a larger cloud is planned only when scale requires it ([Infrastructure and deployment](05-infrastructure-and-deployment.md)).
 
 ## 2. Context diagram (C4 level 1)
 
@@ -44,7 +44,7 @@ flowchart LR
     web[Web app<br/>Next.js / React]
   end
 
-  subgraph Host["Hosting (MVP: Docker host, provider TBD)"]
+  subgraph Host["Hosting (MVP: Contabo Linux VPS)"]
     cdn[CDN + WAF<br/>e.g. Cloudflare]
     lb[Reverse proxy<br/>Caddy / Nginx, TLS]
     api[API server<br/>NestJS modular monolith]

@@ -20,7 +20,7 @@ We need a stack that a small team can be productive in, that is easy to hire for
 | Cache / queues | Redis + BullMQ | Simple, reliable background jobs |
 | Monorepo | pnpm workspaces + Turborepo | Shared packages, fast cached builds |
 | Testing | Vitest/Jest, Supertest, Playwright, Testcontainers | Unit, API, E2E with real PostgreSQL |
-| Infra | Docker and Docker Compose; hosting per [ADR-0005](0005-mvp-hosting-without-aws.md) (no AWS for the MVP) | Portable, cheap and simple for a small team |
+| Infra | Docker and Docker Compose; hosting per [ADR-0005](0005-mvp-hosting-without-aws.md) (Contabo Linux VPS, no AWS for the MVP) | Portable, cheap and simple for a small team |
 | CI/CD | GitHub Actions | Close to the code, free tier for start |
 
 ## Alternatives considered
